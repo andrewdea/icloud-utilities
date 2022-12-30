@@ -40,25 +40,22 @@ error out."
 (defun icloud-download (file)
   "Download FILE from the cloud, using brctl.
 Wait for `icloud-max-wait' seconds: if the file is still not found, error out."
-  (let ((brctl-command (concat
-                        "brctl download \""
-                        file
-                        "\"")))
-    (shell-command brctl-command)
-    (message "%s %s"
-             (propertize "brctl download:" 'face 'minibuffer-prompt)
-             file)
-    (let ((start-time (current-time)))
-      (while (and
-              (not (file-exists-p file))
-              (> icloud-max-wait (nth 1 (time-subtract nil start-time))))
-        (sleep-for 0.005)))
-    (if (file-exists-p file)
-        (progn
-          (message (propertize "Download succeeded" 'face 'minibuffer-prompt))
-          file)
-      (error (message
-              "Could not download this file from iCloud: %s" file)))))
+  (shell-command (concat
+                  "brctl download \"" file "\""))
+  (message "%s %s"
+           (propertize "brctl download:" 'face 'minibuffer-prompt)
+           file)
+  (let ((start-time (current-time)))
+    (while (and
+            (not (file-exists-p file))
+            (> icloud-max-wait (nth 1 (time-subtract nil start-time))))
+      (sleep-for 0.005)))
+  (if (file-exists-p file)
+      (progn
+        (message (propertize "Download succeeded" 'face 'minibuffer-prompt))
+        file)
+    (error (message
+            "Could not download this file from iCloud: %s" file))))
 
 (defun icloud-download-if-needed (path)
   "Check if the file at PATH is in iCloud, and if it is, download it.
