@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2022  Andrew De Angelis
 
-;; Author: Andrew De Angelis <andyjda@Andrews-Air-2>
+;; Author: Andrew De Angelis <bobodeangelis@gmail.com>
 ;; Keywords: comm, files
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -23,7 +23,7 @@
 ;; This is still a sketch, but the main idea is to:
 ;; 1) provide a way to seamlessly check if a file is not present locally,
 ;; and if so, download it (`icloud-find-file')
-;; 2) provide a way to seamlessly open the iCloud document rather than then
+;; 2) provide a way to seamlessly open the iCloud document rather than the
 ;; ".icloud" local copy (`icloud-navigation-mode')
 ;; 3) provide a way to download multiple files (`icloud-download-in-dir')
 ;; 4) provide utilities to do these things asynchronously when needed
@@ -53,7 +53,6 @@ Wait for `icloud-max-wait' seconds: if the file is still not found, error out."
               (not (file-exists-p file))
               (> icloud-max-wait (nth 1 (time-subtract nil start-time))))
         (sleep-for 0.005)))
-    ;; (message "(file-exists-p file)? %s" (file-exists-p file))
     (if (file-exists-p file)
         (progn
           (message (propertize "Download succeeded" 'face 'minibuffer-prompt))
@@ -129,7 +128,8 @@ to `insert-file-contents'"
   (let ((downloaded-file
          ;; apparently the buffer-name is set before `insert-file-contents',
          ;; so we have to rename it with the non-".icloud" name
-         ;; TODO: fix this; maybe download should happen earlier?
+         ;; TODO: fix this; maybe the download should happen earlier?
+         ;; need to look into when the buffer-name is created
          (icloud-download-if-needed (car filename))))
     (rename-buffer (file-name-nondirectory downloaded-file) 'unique)
     (list downloaded-file (cdr filename))))
@@ -143,15 +143,16 @@ trailing \".icloud\" into its expected format, and tries to download it."
   :lighter " icloud"
   :group 'comm
   (if icloud-navigation-mode
-      (advice-add 'insert-file-contents :filter-args #'adv/icloud-download-if-needed)
+      (advice-add 'insert-file-contents :filter-args
+                  #'adv/icloud-download-if-needed)
     (advice-remove 'insert-file-contents #'adv/icloud-download-if-needed)))
 
 ;;;; async support (somewhat experimental)
-;; todo: for better support of these, maybe it'd be better to run an async shell command?
+;; TODO: for better support of these, maybe it'd be better to run an async shell command?
 ;; but since it looks like we can't run brctl on multiple files,
 ;; either we create a buffer for each shell-command, or....????
 
-;; todo: i wonder if best practice around async processes is to use a specialized buffer
+;; TODO: I wonder if best practice around async processes is to use a specialized buffer
 ;; for their messages. in that case, we'd need to generate a buffer for each thread
 ;; and use a `icloud-log' function instead of message
 ;; `icloud-log' should check a buffer-local flag and write to the log, or to the message buffer
@@ -217,11 +218,6 @@ and exit."
         (sleep-for 0.05))
       (setq icloud-max-wait cache)))
   (message "there are no more iCloud threads"))
-
-;; another approach to async could be: `icloud-async-download-files' will save
-;; the new thread name in a list of icloud threads
-;; when trying to stop, use the above function, but keep waiting until
-;; (all-threads) shows that the icloud threads have stopped
 
 (provide 'icloud)
 ;;; icloud.el ends here
