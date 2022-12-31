@@ -249,19 +249,28 @@ To check they are in the cloud, REGEXP is altered to include a beginning
      (icloud-propertize-message "for regexp:") regexp
      (icloud-propertize-message "recursively?") (not (not recursively))
      (icloud-propertize-message "reporting?") (not (not report)))
-    (let ((files (mapcar #'icloud-local-to-download
-                         (if recursively
-                             (directory-files-recursively directory regexp)
-                           (directory-files directory 'full regexp)))))
-      (shell-command
-       (mapconcat #'icloud-shell-command files " && "))
-      (if report
-          (make-thread
-           (lambda ()
-             (mapc #'icloud-report-on-progress files)
-             (icloud-log 'to-message
-                         (icloud-propertize-message
-                          "iCloud report finished for all documents\n"))))))))
+    ;; download
+    (icloud-download-files (if recursively
+                               (directory-files-recursively directory regexp)
+                             (directory-files directory 'full regexp))
+                           report)))
+
+(defun icloud-download-files (files &optional report)
+  "Download FILES from the cloud, if they are non-downloaded local copies.
+If REPORT is non-nil, start an async thread to check on download progress,
+using the buffer *icloud-progress-log*."
+  (let ((files (mapcar
+                #'icloud-local-to-download
+                files)))
+    (shell-command
+     (mapconcat #'icloud-shell-command files " && "))
+    (if report
+        (make-thread
+         (lambda ()
+           (mapc #'icloud-report-on-progress files)
+           (icloud-log 'to-message
+                       (icloud-propertize-message
+                        "iCloud report finished for all documents\n")))))))
 
 (provide 'icloud)
 ;;; icloud.el ends here
