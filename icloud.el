@@ -47,6 +47,11 @@ error out."
   "Face used to display message about iCloud"
   :group 'icloud)
 
+(defface icloud-error
+  '((t :inherit error))
+  "Face used to display error messages about iCloud"
+  :group 'icloud)
+
 (defun icloud-shell-command (file)
   "Build the shell command needed to download FILE."
   (concat
@@ -55,7 +60,7 @@ error out."
 (defun icloud-download (file)
   (shell-command (icloud-shell-command file))
   (message "%s %s"
-           (propertize "Downloading:" 'face 'minibuffer-prompt)
+           (propertize "Downloading:" 'face 'icloud-message)
            file))
 
 (defun icloud-check-on-progress (file)
@@ -87,12 +92,12 @@ If TO-MESSAGE is non-nil, also send progress as `message'"
           (icloud-log
            to-message
            "%s %s"
-           (propertize "Download succeeded: " 'face 'minibuffer-prompt)
+           (propertize "Download succeeded: " 'face 'icloud-message)
            file)
           file) ;; return the file name
       (let ((failed-message
              (format "%s %s"
-                     (propertize "Failed to download this file:" 'face 'error)
+                     (propertize "Failed to download this file:" 'face 'icloud-error)
                      file)))
         (icloud-log to-message failed-message)
         (when error
@@ -202,7 +207,7 @@ To check they are in the cloud, REGEXP is altered to include a beginning
                   "Report on progress? (empty means NO, else YES) "))))))
     (icloud-log
      'to-message
-     "downloading in directory %s for regexp %s, recursively: %s, reporting: %s"
+     "Downloading in directory %s for regexp %s, recursively: %s, reporting: %s"
      directory regexp (not (not recursively)) (not (not report)))
     (let ((files (mapcar #'icloud-local-to-download
                          (if recursively
@@ -217,7 +222,7 @@ To check they are in the cloud, REGEXP is altered to include a beginning
              (icloud-log 'to-message
                          (propertize
                           "iCloud report finished for all documents\n"
-                          'face 'minibuffer-prompt))))))))
+                          'face 'icloud-message))))))))
 
 (provide 'icloud)
 ;;; icloud.el ends here
