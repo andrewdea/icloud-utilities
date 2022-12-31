@@ -123,7 +123,6 @@ If TO-MESSAGE is non-nil, also send progress as `message'"
          (substring filename 1 -7))
       nil)))
 
-;;;###autoload
 (defun icloud-get-file (file &optional error)
   (if (file-exists-p file)
       file
@@ -131,7 +130,6 @@ If TO-MESSAGE is non-nil, also send progress as `message'"
       (icloud-download file)
       (icloud-report-on-progress file error 'to-message))))
 
-;;;###autoload
 (defun icloud-get-file-if-cloud (file &optional error)
   (let ((cloud-file (icloud-local-to-download file)))
     (if cloud-file
@@ -145,12 +143,14 @@ If TO-MESSAGE is non-nil, also send progress as `message'"
 
 ;; TODO: need better names for these functions (`icloud-interactive-download'
 ;; and `icloud-download')
-(defun icloud-interactive-download (file)
+;;;###autoload
+(defun icloud-download-this (file)
   (interactive
    (list (read-file-name "icloud download: ")))
   (icloud-get-file-if-cloud file 'error))
 
-(defun icloud-async-download (file)
+;;;###autoload
+(defun icloud-async-download-this (file)
   (interactive
    (list (read-file-name "icloud async download: ")))
   (let ((file (icloud-local-to-download file)))
@@ -163,6 +163,7 @@ If TO-MESSAGE is non-nil, also send progress as `message'"
   :type 'function
   :group 'icloud)
 
+;;;###autoload
 (defun icloud-open (&optional function)
   (interactive)
   (unwind-protect
