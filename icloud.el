@@ -47,6 +47,9 @@ error out."
   "Face used to display message about iCloud"
   :group 'icloud)
 
+(defun icloud-propertize-message (str)
+  (propertize str 'face 'icloud-message))
+
 (defface icloud-error
   '((t :inherit error))
   "Face used to display error messages about iCloud"
@@ -59,8 +62,8 @@ error out."
 
 (defun icloud-download (file)
   (shell-command (icloud-shell-command file))
-  (message "%s %s"
-           (propertize "Downloading:" 'face 'icloud-message)
+  (message "%s: %s"
+           (icloud-propertize-message "Downloading")
            file))
 
 (defun icloud-check-on-progress (file)
@@ -92,13 +95,13 @@ If TO-MESSAGE is non-nil, also send progress as `message'"
         (progn
           (icloud-log
            to-message
-           "%s %s"
-           (propertize "Download succeeded: " 'face 'icloud-message)
+           "%s: %s"
+           (icloud-propertize-message "Download succeeded")
            file)
           file) ;; return the file name
       (let ((failed-message
-             (format "%s %s"
-                     (propertize "Failed to download this file:" 'face 'icloud-error)
+             (format "%s: %s"
+                     (icloud-propertize-message "Failed to download this file")
                      file)))
         (icloud-log to-message failed-message)
         (when error
@@ -133,13 +136,47 @@ If TO-MESSAGE is non-nil, also send progress as `message'"
   (let ((cloud-file (icloud-local-to-download file)))
     (if cloud-file
         (icloud-get-file cloud-file error)
-      file)))
+      (progn
+        (message "%s: %s"
+                 (icloud-propertize-string
+                  "icloud: this file is already a local copy")
+                 file)
+        file))))
 
-(defun icloud-find-file (file)
+;; TODO: need better names for these functions (`icloud-interactive-download'
+;; and `icloud-download')
+(defun icloud-interactive-download (file)
+  (interactive
+   (list (read-file-name "icloud download: ")))
+  (icloud-get-file-if-cloud file 'error))
+
+(defun icloud-async-download (file)
+  (interactive
+   (list (read-file-name "icloud async download: ")))
+  (let ((file (icloud-local-to-download file)))
+    (icloud-download file)
+    (make-thread
+     (lambda () (icloud-report-on-progress file nil t)))))
+
+(defcustom icloud-default-open-function #'find-file
+  "Function to open files within `icloud-open'"
+  :type 'function
+  :group 'icloud)
+
+(defun icloud-open (&optional function)
+  (interactive)
+  (unwind-protect
+      (progn
+        (icloud-navigation-mode 1)
+        (call-interactively (or function icloud-default-open-function)))
+    (icloud-navigation-mode 'toggle))) ;; TODO: should this be toggle or -1?
+
+;; TODO: maybe try a better `icloud-find-file' for interactive single download
+(defun icloud-find-file-internal (file)
   "This is intended for programmatic use: it expects a FILENAME
 without trailing \".icloud\", so your program won't have to worry about
 the FILENAME changing when the file is in the cloud.
-For interactive use, see `icloud-get-file-if-cloud' and `icloud-navigation-mode'."
+For interactive use, see `icloud-navigation-mode'."
   (find-file (icloud-get-file file)))
 
 (defun adv/icloud-download-if-cloud (filename)
@@ -169,9 +206,6 @@ trailing \".icloud\" into its expected format, and tries to download it."
                   #'adv/icloud-download-if-cloud)
     (advice-remove 'insert-file-contents #'adv/icloud-download-if-cloud)))
 
-;; TODO: maybe `icloud-download-if-local' should be broken down into 2 parts:
-;; in this case, all the checks are useless, since we know the arguments we send
-;; fit the bill
 ;; TODO: there must a better approach to interactive/default arguments?
 ;;;###autoload
 (defun icloud-download-in-directory (&optional directory regexp recursively report)
@@ -209,11 +243,11 @@ To check they are in the cloud, REGEXP is altered to include a beginning
     (icloud-log
      'to-message
      "%s %s,\n%s %s, \n%s %s, %s %s."
-     (propertize "-----------\nDownloading in directory:" 'face 'icloud-message)
+     (icloud-propertize-message "-----------\nDownloading in directory:")
      directory
-     (propertize "for regexp:" 'face 'icloud-message) regexp
-     (propertize "recursively?" 'face 'icloud-message) (not (not recursively))
-     (propertize "reporting?" 'face 'icloud-message) (not (not report)))
+     (icloud-propertize-message "for regexp:") regexp
+     (icloud-propertize-message "recursively?") (not (not recursively))
+     (icloud-propertize-message "reporting?") (not (not report)))
     (let ((files (mapcar #'icloud-local-to-download
                          (if recursively
                              (directory-files-recursively directory regexp)
@@ -225,9 +259,8 @@ To check they are in the cloud, REGEXP is altered to include a beginning
            (lambda ()
              (mapc #'icloud-report-on-progress files)
              (icloud-log 'to-message
-                         (propertize
-                          "iCloud report finished for all documents\n"
-                          'face 'icloud-message))))))))
+                         (icloud-propertize-message
+                          "iCloud report finished for all documents\n"))))))))
 
 (provide 'icloud)
 ;;; icloud.el ends here
