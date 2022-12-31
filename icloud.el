@@ -29,192 +29,195 @@
 ;; 4) provide utilities to do these things asynchronously when needed
 
 ;;; Code:
+(defgroup icloud nil
+  "Utilities for iCloud files."
+  :group 'comm)
+
+;; TODO: maybe there should also be a customizable multiplier that is tied to file-size
+;; eg: every megabite, add a second
 (defcustom icloud-max-wait 3
   "Integer denoting how many seconds `icloud-download' should wait.
 If the file still isnt' downloaded after this amount of seconds,
 error out."
   :type 'integer
-  :group 'comm)
+  :group 'icloud)
 
-;;;###autoload
+(defface icloud-message
+  '((t :inherit minibuffer-prompt))
+  "Face used to display message about iCloud"
+  :group 'icloud)
+
+(defun icloud-shell-command (file)
+  "Build the shell command needed to download FILE."
+  (concat
+   "brctl download \"" file "\""))
+
 (defun icloud-download (file)
-  "Download FILE from the cloud, using brctl.
-Wait for `icloud-max-wait' seconds: if the file is still not found, error out."
-  (shell-command (concat
-                  "brctl download \"" file "\""))
+  (shell-command (icloud-shell-command file))
   (message "%s %s"
-           (propertize "brctl download:" 'face 'minibuffer-prompt)
-           file)
+           (propertize "Downloading:" 'face 'minibuffer-prompt)
+           file))
+
+(defun icloud-check-on-progress (file)
   (let ((start-time (current-time)))
     (while (and
             (not (file-exists-p file))
             (> icloud-max-wait (nth 1 (time-subtract nil start-time))))
       (sleep-for 0.005)))
-  (if (file-exists-p file)
-      (progn
-        (message (propertize "Download succeeded" 'face 'minibuffer-prompt))
-        file)
-    (error (message
-            "Could not download this file from iCloud: %s" file))))
+  (file-exists-p file)) ; return nil when download doesn't succeed
 
-(defun icloud-download-if-needed (path)
-  "Check if the file at PATH is in iCloud, and if it is, download it.
-The check is by verifying that the file-name ends with \".icloud\"
-and starts with a \".\". The download is done by `icloud-download'"
+(defun icloud-log (to-message &rest string)
+  "Log STRING to a buffer."
+  ;; (message "string: %s" string)
+  ;; (message "(car string): %s" (car string))
+  (let ((buf (get-buffer-create "*icloud-progress-log*"))
+        (string (apply #'format string)))
+    (when to-message
+      (message string))
+    (with-current-buffer buf
+      (insert string "\n"))))
+
+(defun icloud-report-on-progress (file &optional error to-message)
+  "Check on progress and log about it in *icloud-progrss-log*.
+If ERROR is non-nil, create an error when the file isn't downloaded.
+If TO-MESSAGE is non-nil, also send progress as `message'"
+  (let ((success (icloud-check-on-progress file)))
+    (if success
+        (progn
+          (icloud-log
+           to-message
+           "%s %s"
+           (propertize "Download succeeded: " 'face 'minibuffer-prompt)
+           file)
+          file) ;; return the file name
+      (let ((failed-message
+             (format "%s %s"
+                     (propertize "Failed to download this file:" 'face 'error)
+                     file)))
+        (icloud-log to-message failed-message)
+        (when error
+          (error failed-message))
+        nil))))
+
+(defun icloud-local-to-download (path)
   (let* ((path (expand-file-name path))
          (filename (file-name-nondirectory path))
          (length (length filename)))
+    ;; (message "path: %s" path)
+    ;; (message "filename: %s" filename)
+    ;; (message "length: %s" length)
     (if (and (> length 7)
              (equal (substring filename -7 length) ".icloud")
              (eq (aref filename 0) ?.))
-        (icloud-download (concat
-                          (file-name-directory path)
-                          (substring filename 1 -7)))
-      path)))
+        (concat
+         (file-name-directory path)
+         (substring filename 1 -7))
+      nil)))
 
-(defun icloud-find-file (filename)
-  "If FILENAME is non-existent, try `icloud-download'ing it.
-Then, open it with `find-file'.
-This is intended for programmatic use: it expects a FILENAME
+;;;###autoload
+(defun icloud-get-file (file &optional error)
+  (if (file-exists-p file)
+      file
+    (progn
+      (icloud-download file)
+      (icloud-report-on-progress file error 'to-message))))
+
+;;;###autoload
+(defun icloud-get-file-if-cloud (file &optional error)
+  (let ((cloud-file (icloud-local-to-download file)))
+    (if cloud-file
+        (icloud-get-file cloud-file error)
+      file)))
+
+(defun icloud-find-file (file)
+  "This is intended for programmatic use: it expects a FILENAME
 without trailing \".icloud\", so your program won't have to worry about
 the FILENAME changing when the file is in the cloud.
-For interactive use, see `icloud-navigation-mode'."
-  (if (file-exists-p filename)
-      (find-file filename)
-    (find-file (icloud-download filename))))
+For interactive use, see `icloud-get-file-if-cloud' and `icloud-navigation-mode'."
+  (find-file (icloud-get-file file)))
 
-;; TODO: maybe `icloud-download-if-needed' should be broken down into 2 parts:
-;; in this case, all the checks are useless, since we know the arguments we send
-;; fit the bill
-;; TODO: there must a better approach to interactive/default arguments?
-;;;###autoload
-(defun icloud-download-in-dir (&optional directory regexp recursively)
-  "Find all iCloud files matching REGEXP in DIRECTORY, and download them.
-If RECURSIVELY is non-nil, also find files within directories inside DIRECTORY.
-To check they are in the cloud, REGEXP is altered to include a beginning
-\"\\..*\" and a trailing \".*\\.icloud\""
-  (interactive)
-  (let* ((directory
-          (or (when (called-interactively-p 'any)
-                (read-directory-name
-                 "Download iCloud files in this directory: "))
-              directory default-directory))
-         (regexp
-          (or (when (called-interactively-p 'any)
-                (read-string
-                 "Download files matching regexp (empty means all files): "))
-              regexp ""))
-         (regexp (concat "\\..*" regexp ".*\\.icloud"))
-         (recursively
-          (or recursively
-              (when (called-interactively-p 'any)
-                (read-string
-                 "Recursively? (empty means NO, anything else is YES) ")))))
-    (message "downloading in directory %s for regexp %s, recursively: %s"
-             directory regexp recursively)
-    (mapc #'icloud-download-if-needed
-          (if (> (length recursively) 0)
-              (directory-files-recursively directory regexp)
-            (directory-files directory regexp)))))
-
-(defun adv/icloud-download-if-needed (filename)
+(defun adv/icloud-download-if-cloud (filename)
   "Function used as advice to `insert-file-contents'.
 It ensures that, if FILENAME is in the cloud, we download it before opening it.
-This is done by calling `icloud-download-if-needed' while filtering arguments
+This is done by calling `icloud-download-if-cloud' while filtering arguments
 to `insert-file-contents'"
   (let ((downloaded-file
-         ;; apparently the buffer-name is set before `insert-file-contents',
-         ;; so we have to rename it with the non-".icloud" name
-         ;; TODO: fix this; maybe the download should happen earlier?
-         ;; need to look into when the buffer-name is created
-         (icloud-download-if-needed (car filename))))
+         (icloud-get-file-if-cloud (car filename) 'error)))
+    ;; apparently the buffer-name is set before `insert-file-contents',
+    ;; so we have to rename it with the non-".icloud" name
+    ;; TODO: fix this; maybe the download should happen earlier?
+    ;; need to look into when the buffer-name is created
     (rename-buffer (file-name-nondirectory downloaded-file) 'unique)
     (list downloaded-file (cdr filename))))
 
 ;;;###autoload
 (define-minor-mode icloud-navigation-mode
   "Minor mode to download iCloud files when we try to open \".icloud\" files.
-this uses `icloud-download-if-needed', which converts any file with
+this uses `icloud-download-if-cloud', which converts any file with
 trailing \".icloud\" into its expected format, and tries to download it."
   :global t
-  :lighter " icloud"
+  :lighter " iCloud"
   :group 'comm
   (if icloud-navigation-mode
       (advice-add 'insert-file-contents :filter-args
-                  #'adv/icloud-download-if-needed)
-    (advice-remove 'insert-file-contents #'adv/icloud-download-if-needed)))
+                  #'adv/icloud-download-if-cloud)
+    (advice-remove 'insert-file-contents #'adv/icloud-download-if-cloud)))
 
-;;;; async support (somewhat experimental)
-;; TODO: for better support of these, maybe it'd be better to run an async shell command?
-;; but since it looks like we can't run brctl on multiple files,
-;; either we create a buffer for each shell-command, or....????
-
-;; TODO: I wonder if best practice around async processes is to use a specialized buffer
-;; for their messages. in that case, we'd need to generate a buffer for each thread
-;; and use a `icloud-log' function instead of message
-;; `icloud-log' should check a buffer-local flag and write to the log, or to the message buffer
-(defvar icloud-async-threads '()
-  "List of threads running icloud jobs.
-these threads are not guaranteed to be currently \"alive\": they are simply
-the ones that were alive last time we checked. for an accurate list of
-live icloud threads, run
-
-\(setq icloud-async-threads
-          (seq-intersection icloud-async-threads (all-threads)))")
-
+;; TODO: maybe `icloud-download-if-local' should be broken down into 2 parts:
+;; in this case, all the checks are useless, since we know the arguments we send
+;; fit the bill
+;; TODO: there must a better approach to interactive/default arguments?
 ;;;###autoload
-(defun icloud-async-download-in-dir (&optional directory regexp recursively)
-  "Make an asynchronous thread to run `icloud-download-in-dir'.
-`icloud-download-in-dir' will:
-Find all iCloud files matching REGEXP in DIRECTORY, and download them.
+(defun icloud-download-in-directory (&optional directory regexp recursively report)
+  "Find all iCloud files matching REGEXP in DIRECTORY, and download them.
 If RECURSIVELY is non-nil, also find files within directories inside DIRECTORY.
+If REPORT is non-nil, start an async thread to check on download progress.
 To check they are in the cloud, REGEXP is altered to include a beginning
 \"\\..*\" and a trailing \".*\\.icloud\""
   (interactive)
   (let* ((directory
-          (or (when (called-interactively-p 'any)
+          (or directory
+              (when (called-interactively-p 'any)
                 (read-directory-name
                  "Download iCloud files in this directory: "))
-              directory default-directory))
+              default-directory))
          (regexp
-          (or (when (called-interactively-p 'any)
+          (or regexp
+              (when (called-interactively-p 'any)
                 (read-string
                  "Download files matching regexp (empty means all files): "))
-              regexp ""))
+              ""))
+         (regexp (concat "\\..*" regexp ".*\\.icloud"))
          (recursively
           (or recursively
               (when (called-interactively-p 'any)
-                (read-string
-                 "Recursively? (empty means NO, anything else is YES) "))))
-         (thread
+                (length
+                 (read-string
+                  "Recursively? (empty means NO, anything else is YES) ")))))
+         (report
+          (or report
+              (when (called-interactively-p 'any)
+                (length
+                 (read-string
+                  "Report on progress? (empty means NO, else YES) "))))))
+    (icloud-log
+     'to-message
+     "downloading in directory %s for regexp %s, recursively: %s, reporting: %s"
+     directory regexp (not (not recursively)) (not (not report)))
+    (let ((files (mapcar #'icloud-local-to-download
+                         (if recursively
+                             (directory-files-recursively directory regexp)
+                           (directory-files directory 'full regexp)))))
+      (shell-command
+       (mapconcat #'icloud-shell-command files " && "))
+      (if report
           (make-thread
            (lambda ()
-             (icloud-download-in-dir directory regexp recursively)))))
-    (message "Downloading iCloud files at this thread: %s" thread)
-    (setq icloud-async-threads
-          (seq-intersection icloud-async-threads (all-threads)))
-    (add-to-list 'icloud-async-threads thread)
-    thread))
-
-(defun icloud-stop-async-jobs ()
-  "Stop all `icloud-async-threads'.
-First, check which iCloud threads are alive.
-Then temporarily set `icloud-max-wait' to 0.
-This makes all the threads error out (see `icloud-download') and stop.
-Wait until all `icloud-async-threads' are dead, then restore `icloud-max-wait'
-and exit."
-  (setq icloud-async-threads
-        (seq-intersection icloud-async-threads (all-threads)))
-  (when icloud-async-threads
-    (let ((cache icloud-max-wait))
-      (setq icloud-max-wait 0)
-      (while (setq icloud-async-threads
-                   (seq-intersection icloud-async-threads (all-threads)))
-        (message "killing iCloud threads. Number of threads: %s"
-                 (length icloud-async-threads))
-        (sleep-for 0.05))
-      (setq icloud-max-wait cache)))
-  (message "there are no more iCloud threads"))
+             (mapc #'icloud-report-on-progress files)
+             (icloud-log 'to-message
+                         (propertize
+                          "iCloud report finished for all documents\n"
+                          'face 'minibuffer-prompt))))))))
 
 (provide 'icloud)
 ;;; icloud.el ends here
