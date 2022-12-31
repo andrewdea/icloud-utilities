@@ -80,6 +80,7 @@ error out."
     (when to-message
       (message string))
     (with-current-buffer buf
+      (end-of-buffer)
       (insert string "\n"))))
 
 (defun icloud-report-on-progress (file &optional error to-message)
@@ -207,8 +208,12 @@ To check they are in the cloud, REGEXP is altered to include a beginning
                   "Report on progress? (empty means NO, else YES) "))))))
     (icloud-log
      'to-message
-     "Downloading in directory %s for regexp %s, recursively: %s, reporting: %s"
-     directory regexp (not (not recursively)) (not (not report)))
+     "%s %s,\n%s %s, \n%s %s, %s %s."
+     (propertize "-----------\nDownloading in directory:" 'face 'icloud-message)
+     directory
+     (propertize "for regexp:" 'face 'icloud-message) regexp
+     (propertize "recursively?" 'face 'icloud-message) (not (not recursively))
+     (propertize "reporting?" 'face 'icloud-message) (not (not report)))
     (let ((files (mapcar #'icloud-local-to-download
                          (if recursively
                              (directory-files-recursively directory regexp)
