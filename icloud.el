@@ -273,10 +273,10 @@ For non-interactive use, see `icloud-find-file'"
 ;;;; download multiple files
 
 ;;;###autoload
-(defun icloud-download-in-directory (&optional directory regexp recursively report)
+(defun icloud-download-in-directory (&optional directory regexp recurse report)
   "Find all iCloud files matching REGEXP in DIRECTORY, and download them.
 DIRECTORY defaults to `default-directory'; REGEXP defaults to an empty string.
-If RECURSIVELY is non-nil, also find files within directories inside DIRECTORY.
+If RECURSE is non-nil, also find files within directories inside DIRECTORY.
 If REPORT is non-nil, start an async thread to check on download progress,
 using the buffer *icloud-progress-log*.
 To check if files are in the cloud, REGEXP is altered to include a beginning
@@ -297,8 +297,8 @@ To check if files are in the cloud, REGEXP is altered to include a beginning
                  "Download files matching regexp (empty means all files): "))
               ""))
          (regexp (concat "\\..*" regexp ".*\\.icloud"))
-         (recursively
-          (or recursively
+         (recurse
+          (or recurse
               (when (called-interactively-p 'any)
                 (length
                  (read-string
@@ -318,10 +318,10 @@ To check if files are in the cloud, REGEXP is altered to include a beginning
      (icloud-propertize-message "for regexp:") regexp
      ;; double-negate to ensure these are logged as booleans:
      ;; the first `not' converts to bool; the second restores its intended value
-     (icloud-propertize-message "recursively?") (not (not recursively))
+     (icloud-propertize-message "recursing?") (not (not recurse))
      (icloud-propertize-message "reporting?") (not (not report)))
     ;; download
-    (icloud-download-files (if recursively
+    (icloud-download-files (if recurse
                                (directory-files-recursively directory regexp)
                              (directory-files directory 'full regexp))
                            report)))
