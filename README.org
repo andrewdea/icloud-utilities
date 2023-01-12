@@ -1,0 +1,64 @@
+#+TITLE: README
+* Table of Contents                                                     :TOC:
+- [[#use][Use]]
+  - [[#icloud-navigation-mode][icloud-navigation-mode]]
+  - [[#icloud-open][icloud-open]]
+  - [[#icloud-find-file][icloud-find-file]]
+  - [[#icloud-download-in-directory][icloud-download-in-directory]]
+  - [[#icloud-download-file-and-icloud-download-files][icloud-download-file and icloud-download-files]]
+- [[#check-on-progress-approach][check-on-progress approach]]
+- [[#async-approach][async approach]]
+- [[#install][Install]]
+- [[#customize][Customize]]
+- [[#contributeissues][Contribute/Issues]]
+
+* Use
+** icloud-navigation-mode
+This minor mode will check every time you try to open a file, whether that file is a local copy of a file in the cloud. If it is, it will ensure that Emacs downloads the file and opens the downloaded copy rather than the local one.
+** icloud-open
+Does what /icloud-navigation-mode/ does, but just once for a specific file. Intended for interactive use.
+** icloud-find-file
+Intended for use within a program. Its argument is a file name: before opening the file, the function checks if the file exists locally or if it needs to be downloaded. This way, your program won't have to worry about the file's name changing (with a trailing ".icloud") when the file is in the cloud.
+** icloud-download-in-directory
+Download all files matching a regexp within the given directory.
+** icloud-download-file and icloud-download-files
+Download the given file(s), but don't open it/them.
+
+* check-on-progress approach
+For some functionalities, like /icloud-open/ or /icloud-find-file/, it's important that we wait until the download is complete before we move to the next step.
+The current approach is to use the function /icloud-check-on-progress/, which checks at intervals of 5 milliseconds whether the file exists yet (meaning the download is complete).
+The function waits for a number of seconds before giving up and signaling that the download didn't succeed. The amount of seconds can be set with the customizable variable /icloud-max-wait/.
+There are some drawbacks to this approach: we don't have a direct view into the download process, so it's possible that this function reports a failed download for one that is simply taking too much time.
+
+* async approach
+For some other functionalities, like /icloud-download-in-directory/, we are not interested in immediately opening the file, so we don't have to wait for it to download. But we still might be interested in monitoring the download progress. For this, we can create a new thread that will use the function /icloud-check-on-progress/ on the given files, and output the progress in a new buffer called /\ast{}icloud-progress-log\ast{}/
+
+* Install
+I'm currently gauging interest to determine whether to publish the package to (M)ELPA. Until then, manual install is the only option:
+ 1. Clone this repo
+ 2. Add this to your init file:
+    #+begin_src emacs-lisp
+      (add-to-list 'load-path "your-path-to/icloud/")
+    #+end_src
+
+ 3. Or, if you use use-package:
+    #+begin_src emacs-lisp
+      (use-package sticky-shell
+        :load-path "your-path-to/icloud/")
+     #+end_src
+* Customize
+The main customizable variables are: `icloud-max-wait' and `icloud-default-open-function'
+ - `icloud-max-wait' is the amount of seconds that /icloud-check-on-progress/ will wait before reporting a download as failed. Note that this doesn't mean the download will always take this amount of time: we check on a download-progress every 0.005 seconds, so we can open a file almost as soon as its download is complete.
+
+ - `icloud-default-open-function' is the default interactive function used within /icloud-open/. This way we can leverage all of the completion capabilities and configuration within our preferred file-opening function, while making sure that we download files from the cloud when needed.
+
+For example, my use-package configuration for /icloud/ looks like this:
+    #+begin_src emacs-lisp
+      (use-package icloud
+        :custom
+        ;; use `ido-find-file' to open cloud files
+        (icloud-default-open-function (if ido-mode #'ido-find-file #'find-file)))
+    #+end_src
+
+* Contribute/Issues
+Please contact me here or at bobodeangelis@gmail.com with any feedback, particularly if you'd like to add features or if you encounter any issues while using this package.
