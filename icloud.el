@@ -316,6 +316,8 @@ To check if files are in the cloud, REGEXP is altered to include a beginning
      (icloud-propertize-message "-----------\nDownloading in directory:")
      directory
      (icloud-propertize-message "for regexp:") regexp
+     ;; double-negate to ensure these are logged as booleans:
+     ;; the first `not' converts to bool; the second restores its intended value
      (icloud-propertize-message "recursively?") (not (not recursively))
      (icloud-propertize-message "reporting?") (not (not report)))
     ;; download
