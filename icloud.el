@@ -180,6 +180,7 @@ If ERROR is non-nil, throw an error when download fails"
                  file)
         file))))
 
+;;;###autoload
 (defun icloud-find-file (file)
   "Open FILE, downloading it if needed.
 This is intended for programmatic use: it expects a file-name
@@ -191,6 +192,10 @@ For interactive use, see
 
 ;;;; interactive interface for single-file downloads
 
+;; TODO: is this function really needed?
+;; seems that, when non-async is needed, user would just opt for `icloud-open'
+;; and if we just need to download a file without immediately opening it,
+;; why not use `icloud-async-download'
 ;;;###autoload
 (defun icloud-download (file)
   "Download FILE from iCloud, wait on its progress, return name of local copy.
