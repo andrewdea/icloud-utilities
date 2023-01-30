@@ -47,6 +47,12 @@
   :type 'function
   :group 'icloud)
 
+(defcustom icloud-destination-directory
+  "~/Library/Mobile\  Documents/com~apple~CloudDocs/"
+  "Default 'iCloud Drive' directory to move/copy files to."
+  :type 'directory
+  :group 'icloud)
+
 (defface icloud-message
   '((t :inherit minibuffer-prompt))
   "Face used to display messages about iCloud."
@@ -351,6 +357,59 @@ using the buffer *icloud-progress-log*."
     (icloud-log 'to-message "%s %s files"
                 (icloud-propertize-message "Downloading")
                 (length files))))
+
+;;;; copy/move files to cloud drive
+
+;;;###autoload
+(defun icloud-copy-to (&optional file destination)
+  (interactive)
+  (icloud--cp-or-mv "cp" file destination))
+
+;;;###autoload
+(defun icloud-move-to (&optional file destination)
+  (interactive)
+  (icloud--cp-or-mv "mv" file destination))
+
+;;;###autoload
+(defun icloud-symlink-to (&optional file destination)
+  (interactive)
+  (let* ((prompt "Symlink to iCloud: ")
+         (file
+          (or file
+              (read-file-name prompt default-directory)))
+         (destination
+          (or destination
+              (read-directory-name "To directory: "
+                                   icloud-destination-directory)))
+         (move-first
+          (when (file-exists-p file)
+            (y-or-n-p (format "%s exists locally, move it to Cloud first?"
+                              file))))
+         (destination (if move-first
+                          (string-replace " " "\\ "
+                                          (concat destination
+                                                  (file-name-nondirectory
+                                                   file))))
+                      destination)
+         (command (progn (when move-first
+                           (icloud--cp-or-mv "mv" file destination))
+                         (format "ln -s %s %s" destination file))))
+    (message "executing command: %s" command)
+    (shell-command command)))
+
+(defun icloud--cp-or-mv (action &optional file destination)
+  (let* ((prompt (concat action "__ to iCloud: "))
+         (file
+          (or file
+              (read-file-name prompt default-directory)))
+         (destination
+          (or destination
+              (read-directory-name "To directory: "
+                                   icloud-destination-directory)))
+         (destination (string-replace " " "\\ " destination))
+         (command (format "%s %s %s" action file destination)))
+    (message "executing command: %s" command)
+    (shell-command command)))
 
 (provide 'icloud)
 ;;; icloud.el ends here
