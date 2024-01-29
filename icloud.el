@@ -373,27 +373,30 @@ using the buffer *icloud-progress-log*."
 ;;;###autoload
 (defun icloud-symlink-to (&optional file destination)
   (interactive)
-  (let* ((prompt "Symlink to iCloud: ")
-         (file
+  (let* ((file
           (or file
-              (read-file-name prompt default-directory)))
+              (read-file-name "Symlink __ to iCloud: " default-directory)))
          (destination
           (or destination
-              (read-directory-name "To directory: "
-                                   icloud-destination-directory)))
+              (read-file-name (format "Link %s to: "
+                                      (file-name-nondirectory file))
+                              icloud-destination-directory)))
          (move-first
           (when (file-exists-p file)
             (y-or-n-p (format "%s exists locally, move it to Cloud first?"
                               file))))
-         (destination (if move-first
-                          (string-replace " " "\\ "
-                                          (concat destination
-                                                  (file-name-nondirectory
-                                                   file))))
-                      destination)
-         (command (progn (when move-first
-                           (icloud--cp-or-mv "mv" file destination))
-                         (format "ln -s %s %s" destination file))))
+         ;; (override
+         ;;  (when (file-exists-p destination)
+         ;;    (y-or-n-p (format "%s already exists, overwrite it with %s?"
+         ;;                      destination file))))
+         (destination (string-replace
+                       " " "\\ "
+                       (progn
+                         (when move-first
+                           (icloud--cp-or-mv "mv" file (file-name-directory
+                                                        destination)))
+                         destination)))
+         (command (format "ln -s %s %s" destination file)))
     (message "executing command: %s" command)
     (shell-command command)))
 
